@@ -1,0 +1,22 @@
+# Binaries
+bin/
+*.exe
+
+# Go
+*.test
+*.out
+coverage.txt
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local config
+.env
+*.local.yaml

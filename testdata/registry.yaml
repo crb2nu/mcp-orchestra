@@ -1,0 +1,34 @@
+# Example MCP server registry for testing
+servers:
+  - name: filesystem
+    endpoint: ws://localhost:8081
+    tools:
+      - read_file
+      - write_file
+      - list_directory
+      - search_files
+
+  - name: kubernetes
+    endpoint: ws://localhost:8082
+    tools:
+      - get_pods
+      - get_services
+      - apply_manifest
+      - delete_resource
+      - get_logs
+
+  - name: git
+    endpoint: ws://localhost:8083
+    tools:
+      - git_status
+      - git_diff
+      - git_commit
+      - git_log
+      - git_branch
+
+  - name: schema
+    endpoint: ws://localhost:8084
+    tools:
+      - validate_json
+      - validate_yaml
+      - generate_schema

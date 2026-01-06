@@ -1,0 +1,34 @@
+# Example task definition: Read, validate, and apply a config file
+name: deploy-config
+steps:
+  - id: read
+    tool: filesystem/read_file
+    args:
+      path: /app/config.yaml
+
+  - id: validate
+    tool: schema/validate_yaml
+    depends_on: [read]
+    args:
+      content: ${{ steps.read.output }}
+      schema_path: /app/config-schema.json
+
+  - id: check-pods
+    tool: kubernetes/get_pods
+    args:
+      namespace: default
+      label_selector: app=myapp
+
+  - id: apply
+    tool: kubernetes/apply_manifest
+    depends_on: [validate, check-pods]
+    args:
+      manifest: ${{ steps.read.output }}
+      namespace: default
+
+  - id: verify
+    tool: kubernetes/get_pods
+    depends_on: [apply]
+    args:
+      namespace: default
+      label_selector: app=myapp

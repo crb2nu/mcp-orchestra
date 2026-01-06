@@ -5,6 +5,7 @@ go 1.24.0
 require (
 	github.com/google/uuid v1.6.0
 	github.com/spf13/cobra v1.9.1
+	gitlab.flexinfer.ai/libs/fi-mcp-kit v0.0.0
 	gitlab.flexinfer.ai/libs/mcp-go v0.1.0
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -18,3 +19,6 @@ require (
 
 // Use local mcp-go with pool package (until v0.2.0 is published)
 replace gitlab.flexinfer.ai/libs/mcp-go => ../../libs/mcp-go
+
+// Use local fi-mcp-kit for registry/schema compatibility
+replace gitlab.flexinfer.ai/libs/fi-mcp-kit => ../../libs/fi-mcp-kit

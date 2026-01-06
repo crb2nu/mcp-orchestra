@@ -6,9 +6,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
+	kitgen "gitlab.flexinfer.ai/libs/fi-mcp-kit/pkg/generator"
+	kitreg "gitlab.flexinfer.ai/libs/fi-mcp-kit/pkg/registry"
 	mcp "gitlab.flexinfer.ai/libs/mcp-go"
 	"gitlab.flexinfer.ai/services/mcp-orchestra/internal/transport"
 	"gitlab.flexinfer.ai/services/mcp-orchestra/pkg/types"
@@ -34,13 +38,43 @@ func New() *Registry {
 	}
 }
 
+type LoadOptions struct {
+	Target string
+}
+
 // LoadFromFile loads registry configuration from a YAML file.
 func LoadFromFile(path string) (*Registry, error) {
+	return LoadFromFileWithOptions(path, LoadOptions{})
+}
+
+// LoadFromFileWithOptions loads either the legacy orchestra registry schema or the
+// fi-mcp/loom registry schema (versioned).
+func LoadFromFileWithOptions(path string, opts LoadOptions) (*Registry, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read registry file: %w", err)
 	}
 
+	if opts.Target == "" {
+		opts.Target = "codex"
+	}
+
+	var sniff struct {
+		Version *int `yaml:"version"`
+	}
+	if err := yaml.Unmarshal(data, &sniff); err != nil {
+		return nil, fmt.Errorf("failed to parse registry YAML: %w", err)
+	}
+
+	// If a version is present, treat as fi-mcp/loom registry schema.
+	if sniff.Version != nil {
+		return loadFromFiRegistry(path, data, opts)
+	}
+
+	return loadFromOrchestraRegistry(path, data)
+}
+
+func loadFromOrchestraRegistry(path string, data []byte) (*Registry, error) {
 	var config struct {
 		Servers []types.ServerInfo `yaml:"servers"`
 	}
@@ -68,6 +102,93 @@ func LoadFromFile(path string) (*Registry, error) {
 	}
 
 	return r, nil
+}
+
+func loadFromFiRegistry(path string, data []byte, opts LoadOptions) (*Registry, error) {
+	reg, err := kitreg.Load(path)
+	if err != nil {
+		return nil, err
+	}
+	reg.MergeDefaultAliases()
+
+	repoRoot := kitreg.GetRepoRoot(path)
+
+	r := New()
+	r.filePath = path
+
+	for _, srv := range reg.Servers {
+		if srv == nil {
+			continue
+		}
+
+		spec, err := reg.GetServerSpec(srv.Name, opts.Target)
+		if err != nil || spec == nil {
+			continue
+		}
+
+		endpoint, tools := fiSpecToEndpointAndTools(repoRoot, spec)
+		if endpoint == "" {
+			continue
+		}
+
+		server := types.ServerInfo{
+			Name:     srv.Name,
+			Endpoint: endpoint,
+			Tools:    tools,
+			Healthy:  true,
+		}
+
+		r.servers[server.Name] = &server
+
+		for _, tool := range server.Tools {
+			ref := types.ToolRef{Server: server.Name, Tool: tool}
+			r.tools[ref.String()] = ref
+			if _, exists := r.tools[tool]; !exists {
+				r.tools[tool] = ref
+			}
+		}
+	}
+
+	return r, nil
+}
+
+func fiSpecToEndpointAndTools(repoRoot string, spec *kitreg.TargetSpec) (string, []string) {
+	var tools []string
+	for _, tool := range spec.Tools {
+		if strings.TrimSpace(tool.Name) != "" {
+			tools = append(tools, tool.Name)
+		}
+	}
+
+	cmd := kitgen.ResolveCommand(spec.Command, repoRoot, "local")
+
+	// If the spec explicitly declares a websocket transport (or looks like one),
+	// treat Command as the endpoint URL.
+	if strings.EqualFold(spec.Type, "websocket") ||
+		strings.HasPrefix(cmd, "ws://") ||
+		strings.HasPrefix(cmd, "wss://") {
+		return cmd, tools
+	}
+
+	args := kitgen.ResolveArgs(spec.Args, repoRoot, "local")
+
+	var env []string
+	if len(spec.Env) > 0 {
+		keys := make([]string, 0, len(spec.Env))
+		for k := range spec.Env {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			env = append(env, fmt.Sprintf("%s=%s", k, kitgen.ResolveTokens(spec.Env[k], repoRoot, "local")))
+		}
+	}
+
+	if cmd == "" {
+		return "", nil
+	}
+
+	return transport.BuildStdioEndpoint(cmd, args, env, repoRoot), tools
 }
 
 // GetServer returns server info by name.

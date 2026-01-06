@@ -27,10 +27,10 @@ type Coordinator struct {
 
 // Config holds coordinator configuration.
 type Config struct {
-	Registry      *registry.Registry
-	Planner       planner.Planner
-	ExecutorCfg   executor.Config
-	MaxHistory    int // Maximum number of completed tasks to retain
+	Registry    *registry.Registry
+	Planner     planner.Planner
+	ExecutorCfg executor.Config
+	MaxHistory  int // Maximum number of completed tasks to retain
 }
 
 // New creates a new coordinator.

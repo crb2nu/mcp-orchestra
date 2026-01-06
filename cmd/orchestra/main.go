@@ -26,6 +26,7 @@ var (
 	// Global flags
 	registryPath string
 	logLevel     string
+	target       string
 )
 
 func main() {
@@ -37,6 +38,7 @@ func main() {
 
 	rootCmd.PersistentFlags().StringVar(&registryPath, "registry", "", "Path to MCP registry YAML")
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "info", "Log level (debug, info, warn, error)")
+	rootCmd.PersistentFlags().StringVar(&target, "target", envOrDefault("ORCHESTRA_TARGET", "codex"), "Registry target profile (for fi-mcp/loom registries)")
 
 	rootCmd.AddCommand(serveCmd())
 	rootCmd.AddCommand(runCmd())
@@ -352,7 +354,14 @@ func loadRegistry() (*registry.Registry, error) {
 		path = "./registry.yaml"
 	}
 
-	return registry.LoadFromFile(path)
+	return registry.LoadFromFileWithOptions(path, registry.LoadOptions{Target: target})
+}
+
+func envOrDefault(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
 }
 
 // HTTP Handlers

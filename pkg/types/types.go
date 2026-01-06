@@ -81,19 +81,19 @@ func (t ToolRef) String() string {
 
 // TaskEvent represents a streaming event during task execution.
 type TaskEvent struct {
-	Type      string      `json:"type"`                 // step_start, step_complete, step_error, task_complete
-	TaskID    string      `json:"task_id"`              // Parent task ID
-	StepID    string      `json:"step_id,omitempty"`    // Step ID (for step events)
-	Tool      string      `json:"tool,omitempty"`       // Tool being executed
-	Output    interface{} `json:"output,omitempty"`     // Step output
-	Error     string      `json:"error,omitempty"`      // Error message
-	Timestamp time.Time   `json:"timestamp"`            // Event timestamp
+	Type      string      `json:"type"`              // step_start, step_complete, step_error, task_complete
+	TaskID    string      `json:"task_id"`           // Parent task ID
+	StepID    string      `json:"step_id,omitempty"` // Step ID (for step events)
+	Tool      string      `json:"tool,omitempty"`    // Tool being executed
+	Output    interface{} `json:"output,omitempty"`  // Step output
+	Error     string      `json:"error,omitempty"`   // Error message
+	Timestamp time.Time   `json:"timestamp"`         // Event timestamp
 }
 
 // ExecutionPlan represents a planned execution strategy for a task.
 type ExecutionPlan struct {
-	TaskID string           `json:"task_id"`
-	Waves  [][]string       `json:"waves"`  // Steps grouped by execution wave (parallel within wave)
+	TaskID string              `json:"task_id"`
+	Waves  [][]string          `json:"waves"` // Steps grouped by execution wave (parallel within wave)
 	Graph  map[string][]string `json:"graph"` // Dependency graph (step -> dependencies)
 }
 

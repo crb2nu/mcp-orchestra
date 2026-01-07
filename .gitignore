@@ -20,3 +20,19 @@ Thumbs.db
 # Local config
 .env
 *.local.yaml
+
+# --- Loom MCP tooling (local; do not commit) ---
+.codex/
+.gemini/
+.vscode-mcp/
+
+# Per-tool config files
+.claude/mcp.json
+.codex/config.toml
+.gemini/config.toml
+.kilocode/config.toml
+.antigravity/mcp.json
+.vscode/mcp.json
+
+# Claude Desktop app config (local)
+claude_desktop_config/

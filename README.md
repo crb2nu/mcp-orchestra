@@ -1,3 +1,5 @@
+![Banner](assets/banner.png)
+
 # MCP Orchestra
 
 Multi-agent coordinator service that orchestrates multiple MCP servers as a unified agent swarm for complex, multi-step tasks.

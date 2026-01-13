@@ -58,7 +58,7 @@ Use `${{ steps.STEP_ID.output }}` to reference output from a previous step.
 - Uses `mcp-go` for MCP protocol implementation
 - Connection pooling prevents excessive reconnections
 - Events are streamed via SSE for real-time feedback
-- Static planner requires explicit DAGs; LLM planner (TODO) will convert prompts
+- Static planner requires explicit DAGs; LLM planner can convert prompts when configured
 
 ## Testing
 

@@ -1,4 +1,4 @@
-.PHONY: build test lint run clean setup tidy fmt
+.PHONY: build test lint run clean setup tidy fmt ci openapi
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS := -ldflags "-X main.version=$(VERSION)"
@@ -34,3 +34,8 @@ tidy:
 
 setup: tidy
 	go mod download
+
+openapi:
+	./scripts/validate-openapi.sh
+
+ci: tidy test lint openapi

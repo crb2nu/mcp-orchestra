@@ -2,12 +2,16 @@ openapi: 3.0.3
 info:
   title: MCP Orchestra API
   version: 0.1.0
+  license:
+    name: MIT
 servers:
   - url: http://localhost:8090
+security: []
 paths:
   /health:
     get:
       summary: Health check
+      operationId: getHealth
       responses:
         "200":
           description: Service is healthy
@@ -19,9 +23,16 @@ paths:
                 properties:
                   status:
                     type: string
+        "500":
+          description: Internal error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /ready:
     get:
       summary: Readiness check
+      operationId: getReady
       responses:
         "200":
           description: Service is ready
@@ -33,9 +44,16 @@ paths:
                 properties:
                   status:
                     type: string
+        "500":
+          description: Internal error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /v1/tools:
     get:
       summary: List available tools
+      operationId: listTools
       responses:
         "200":
           description: Tool inventory
@@ -45,9 +63,16 @@ paths:
                 type: object
                 additionalProperties:
                   $ref: "#/components/schemas/ToolRef"
+        "500":
+          description: Internal error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /v1/servers:
     get:
       summary: List registered MCP servers
+      operationId: listServers
       responses:
         "200":
           description: Server list
@@ -57,9 +82,16 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/ServerInfo"
+        "500":
+          description: Internal error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /v1/tasks:
     get:
       summary: List tasks
+      operationId: listTasks
       parameters:
         - name: status
           in: query
@@ -81,8 +113,15 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
     post:
       summary: Submit a task
+      operationId: submitTask
       requestBody:
         required: true
         content:
@@ -121,9 +160,16 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /v1/tasks/{id}:
     get:
       summary: Get task status
+      operationId: getTask
       parameters:
         - name: id
           in: path
@@ -143,9 +189,16 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /v1/tasks/{id}/cancel:
     post:
       summary: Cancel a task
+      operationId: cancelTask
       parameters:
         - name: id
           in: path
@@ -169,8 +222,25 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 components:
   schemas:
+    AnyValue:
+      nullable: true
+      oneOf:
+        - type: string
+        - type: number
+        - type: integer
+        - type: boolean
+        - type: object
+          additionalProperties: true
+        - type: array
+          items: {}
     TaskStatus:
       type: string
       enum: [pending, running, completed, failed, cancelled]
@@ -218,7 +288,7 @@ components:
         status:
           $ref: "#/components/schemas/StepStatus"
         output:
-          nullable: true
+          $ref: "#/components/schemas/AnyValue"
         error:
           type: string
         started_at:
@@ -244,7 +314,7 @@ components:
         status:
           $ref: "#/components/schemas/TaskStatus"
         result:
-          nullable: true
+          $ref: "#/components/schemas/AnyValue"
         error:
           type: string
         metadata:
@@ -273,7 +343,7 @@ components:
         tool:
           type: string
         output:
-          nullable: true
+          $ref: "#/components/schemas/AnyValue"
         error:
           type: string
         timestamp:

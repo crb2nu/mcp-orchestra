@@ -172,6 +172,9 @@ Cancel a running or pending task.
 # Initial setup
 make setup
 
+# Validate OpenAPI schema
+make openapi
+
 # Run locally
 go run ./cmd/orchestra serve --registry ./testdata/registry.yaml
 

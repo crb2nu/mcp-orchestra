@@ -1,6 +1,7 @@
 package executor
 
 import (
+	"reflect"
 	"sync"
 	"testing"
 )
@@ -16,7 +17,7 @@ func TestInterpolateStringExactMatchReturnsValue(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if result != expected {
+	if !reflect.DeepEqual(result, expected) {
 		t.Fatalf("expected output to be returned as-is")
 	}
 }

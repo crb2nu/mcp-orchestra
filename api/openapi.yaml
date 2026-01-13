@@ -77,6 +77,10 @@ paths:
                   $ref: "#/components/schemas/Task"
         "400":
           description: Invalid status filter
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
     post:
       summary: Submit a task
       requestBody:
@@ -107,8 +111,16 @@ paths:
                 $ref: "#/components/schemas/TaskEvent"
         "400":
           description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "501":
           description: LLM planner not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /v1/tasks/{id}:
     get:
       summary: Get task status
@@ -127,6 +139,10 @@ paths:
                 $ref: "#/components/schemas/Task"
         "404":
           description: Task not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /v1/tasks/{id}/cancel:
     post:
       summary: Cancel a task
@@ -149,6 +165,10 @@ paths:
                     type: string
         "400":
           description: Task cannot be cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 components:
   schemas:
     TaskStatus:
@@ -259,3 +279,10 @@ components:
         timestamp:
           type: string
           format: date-time
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: string

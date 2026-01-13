@@ -16,6 +16,7 @@ import (
 	"gitlab.flexinfer.ai/services/mcp-orchestra/internal/executor"
 	"gitlab.flexinfer.ai/services/mcp-orchestra/internal/planner"
 	"gitlab.flexinfer.ai/services/mcp-orchestra/internal/registry"
+	"gitlab.flexinfer.ai/services/mcp-orchestra/internal/store"
 	"gitlab.flexinfer.ai/services/mcp-orchestra/pkg/types"
 	"gopkg.in/yaml.v3"
 )
@@ -59,6 +60,7 @@ func serveCmd() *cobra.Command {
 	var maxOpen int
 	var idleTimeout time.Duration
 	var timeout time.Duration
+	var storePath string
 
 	// LLM configuration
 	var llmEndpoint string
@@ -87,6 +89,14 @@ func serveCmd() *cobra.Command {
 				p = planner.NewStaticPlanner()
 			}
 
+			var taskStore store.TaskStore
+			if storePath != "" {
+				taskStore, err = store.NewFileStore(storePath)
+				if err != nil {
+					return fmt.Errorf("load task store: %w", err)
+				}
+			}
+
 			coord := coordinator.New(coordinator.Config{
 				Registry: reg,
 				Planner:  p,
@@ -96,6 +106,7 @@ func serveCmd() *cobra.Command {
 					IdleTimeout: idleTimeout,
 					Timeout:     timeout,
 				},
+				Store: taskStore,
 			})
 			defer coord.Close()
 
@@ -144,6 +155,7 @@ func serveCmd() *cobra.Command {
 	cmd.Flags().IntVar(&maxOpen, "pool-max-open", 10, "Max open connections per MCP server")
 	cmd.Flags().DurationVar(&idleTimeout, "pool-idle-timeout", 5*time.Minute, "Connection idle timeout")
 	cmd.Flags().DurationVar(&timeout, "timeout", 5*time.Minute, "Default task timeout")
+	cmd.Flags().StringVar(&storePath, "store-path", "", "Path to task store file")
 
 	// LLM flags
 	cmd.Flags().StringVar(&llmEndpoint, "llm-endpoint", "", "LLM API endpoint (e.g., https://api.openai.com/v1/chat/completions)")
@@ -381,16 +393,14 @@ func readyHandler(w http.ResponseWriter, r *http.Request) {
 func toolsHandler(coord *coordinator.Coordinator) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		tools := coord.ListTools()
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(tools)
+		writeJSON(w, http.StatusOK, tools)
 	}
 }
 
 func serversHandler(coord *coordinator.Coordinator) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		servers := coord.ListServers()
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(servers)
+		writeJSON(w, http.StatusOK, servers)
 	}
 }
 
@@ -403,8 +413,10 @@ func submitTaskHandler(coord *coordinator.Coordinator, llmEnabled bool) http.Han
 			Timeout string      `json:"timeout,omitempty"`
 		}
 
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, `{"error": "invalid JSON"}`, http.StatusBadRequest)
+		decoder := json.NewDecoder(r.Body)
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&req); err != nil {
+			writeJSONError(w, http.StatusBadRequest, "invalid JSON")
 			return
 		}
 
@@ -412,7 +424,7 @@ func submitTaskHandler(coord *coordinator.Coordinator, llmEnabled bool) http.Han
 		if req.Timeout != "" {
 			timeout, err := time.ParseDuration(req.Timeout)
 			if err != nil {
-				http.Error(w, `{"error": "invalid timeout format"}`, http.StatusBadRequest)
+				writeJSONError(w, http.StatusBadRequest, "invalid timeout format")
 				return
 			}
 			var cancel context.CancelFunc
@@ -427,23 +439,23 @@ func submitTaskHandler(coord *coordinator.Coordinator, llmEnabled bool) http.Han
 			events, err = coord.SubmitAndExecute(ctx, req.Task)
 		} else if req.Prompt != "" {
 			if !llmEnabled {
-				http.Error(w, `{"error": "LLM planner not configured. Start server with --llm-endpoint"}`, http.StatusNotImplemented)
+				writeJSONError(w, http.StatusNotImplemented, "LLM planner not configured. Start server with --llm-endpoint")
 				return
 			}
 			// Use LLM planner to generate task from prompt
 			task, planErr := coord.SubmitPrompt(ctx, req.Prompt)
 			if planErr != nil {
-				http.Error(w, fmt.Sprintf(`{"error": "planning failed: %s"}`, planErr.Error()), http.StatusBadRequest)
+				writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("planning failed: %s", planErr.Error()))
 				return
 			}
 			events, err = coord.Execute(ctx, task.ID)
 		} else {
-			http.Error(w, `{"error": "either task or prompt required"}`, http.StatusBadRequest)
+			writeJSONError(w, http.StatusBadRequest, "either task or prompt required")
 			return
 		}
 
 		if err != nil {
-			http.Error(w, fmt.Sprintf(`{"error": %q}`, err.Error()), http.StatusBadRequest)
+			writeJSONError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 
@@ -471,8 +483,7 @@ func submitTaskHandler(coord *coordinator.Coordinator, llmEnabled bool) http.Han
 				lastEvent = event
 			}
 
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(lastEvent)
+			writeJSON(w, http.StatusOK, lastEvent)
 		}
 	}
 }
@@ -482,12 +493,11 @@ func getTaskHandler(coord *coordinator.Coordinator) http.HandlerFunc {
 		taskID := r.PathValue("id")
 		task, err := coord.GetTask(taskID)
 		if err != nil {
-			http.Error(w, fmt.Sprintf(`{"error": %q}`, err.Error()), http.StatusNotFound)
+			writeJSONError(w, http.StatusNotFound, err.Error())
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(task)
+		writeJSON(w, http.StatusOK, task)
 	}
 }
 
@@ -495,13 +505,12 @@ func listTasksHandler(coord *coordinator.Coordinator) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		statusParam := r.URL.Query().Get("status")
 		if statusParam != "" && !isValidTaskStatus(statusParam) {
-			http.Error(w, `{"error": "invalid status filter"}`, http.StatusBadRequest)
+			writeJSONError(w, http.StatusBadRequest, "invalid status filter")
 			return
 		}
 
 		tasks := coord.ListTasks(types.TaskStatus(statusParam))
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(tasks)
+		writeJSON(w, http.StatusOK, tasks)
 	}
 }
 
@@ -522,12 +531,24 @@ func cancelTaskHandler(coord *coordinator.Coordinator) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		taskID := r.PathValue("id")
 		if err := coord.CancelTask(taskID); err != nil {
-			http.Error(w, fmt.Sprintf(`{"error": %q}`, err.Error()), http.StatusBadRequest)
+			writeJSONError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusAccepted)
-		w.Write([]byte(`{"status": "cancelling"}`))
+		writeJSON(w, http.StatusAccepted, map[string]string{"status": "cancelling"})
 	}
+}
+
+type errorResponse struct {
+	Error string `json:"error"`
+}
+
+func writeJSON(w http.ResponseWriter, status int, payload interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(payload)
+}
+
+func writeJSONError(w http.ResponseWriter, status int, message string) {
+	writeJSON(w, status, errorResponse{Error: message})
 }

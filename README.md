@@ -64,6 +64,9 @@ orchestra serve --registry /path/to/registry.yaml --port 8090
 
 # Or connect to running gateway
 orchestra serve --gateway ws://localhost:8080 --port 8090
+
+# Persist tasks to disk
+orchestra serve --registry /path/to/registry.yaml --store-path /var/lib/orchestra/tasks.json
 ```
 
 ### Execute a Multi-Tool Task
@@ -166,6 +169,9 @@ Cancel a running or pending task.
 ## Development
 
 ```bash
+# Initial setup
+make setup
+
 # Run locally
 go run ./cmd/orchestra serve --registry ./testdata/registry.yaml
 

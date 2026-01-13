@@ -1,12 +1,12 @@
 module gitlab.flexinfer.ai/services/mcp-orchestra
 
-go 1.24.0
+go 1.25.5
 
 require (
 	github.com/google/uuid v1.6.0
 	github.com/spf13/cobra v1.9.1
 	gitlab.flexinfer.ai/libs/fi-mcp-kit v0.0.0
-	gitlab.flexinfer.ai/libs/mcp-go v0.1.0
+	gitlab.flexinfer.ai/libs/mcp-go v0.2.1-0.20260109074210-96a844bee930
 	gopkg.in/yaml.v3 v3.0.1
 )
 

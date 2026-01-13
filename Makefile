@@ -1,4 +1,4 @@
-.PHONY: build test lint run clean
+.PHONY: build test lint run clean setup tidy fmt
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS := -ldflags "-X main.version=$(VERSION)"
@@ -6,7 +6,7 @@ LDFLAGS := -ldflags "-X main.version=$(VERSION)"
 build:
 	go build $(LDFLAGS) -o bin/orchestra ./cmd/orchestra
 
-test:
+test: tidy
 	go test -race -cover ./...
 
 lint:
@@ -31,3 +31,6 @@ fmt:
 
 tidy:
 	go mod tidy
+
+setup: tidy
+	go mod download

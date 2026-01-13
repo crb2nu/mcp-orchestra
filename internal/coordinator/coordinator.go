@@ -11,6 +11,7 @@ import (
 	"gitlab.flexinfer.ai/services/mcp-orchestra/internal/executor"
 	"gitlab.flexinfer.ai/services/mcp-orchestra/internal/planner"
 	"gitlab.flexinfer.ai/services/mcp-orchestra/internal/registry"
+	"gitlab.flexinfer.ai/services/mcp-orchestra/internal/store"
 	"gitlab.flexinfer.ai/services/mcp-orchestra/pkg/types"
 )
 
@@ -19,9 +20,8 @@ type Coordinator struct {
 	registry *registry.Registry
 	planner  planner.Planner
 	executor *executor.Executor
+	store    store.TaskStore
 
-	tasks      map[string]*types.Task
-	tasksMu    sync.RWMutex
 	maxHistory int
 
 	cancels   map[string]context.CancelFunc
@@ -33,6 +33,7 @@ type Config struct {
 	Registry    *registry.Registry
 	Planner     planner.Planner
 	ExecutorCfg executor.Config
+	Store       store.TaskStore
 	MaxHistory  int // Maximum number of completed tasks to retain
 }
 
@@ -44,6 +45,9 @@ func New(cfg Config) *Coordinator {
 	if cfg.Planner == nil {
 		cfg.Planner = planner.NewStaticPlanner()
 	}
+	if cfg.Store == nil {
+		cfg.Store = store.NewMemoryStore()
+	}
 
 	cfg.ExecutorCfg.Registry = cfg.Registry
 
@@ -51,7 +55,7 @@ func New(cfg Config) *Coordinator {
 		registry:   cfg.Registry,
 		planner:    cfg.Planner,
 		executor:   executor.New(cfg.ExecutorCfg),
-		tasks:      make(map[string]*types.Task),
+		store:      cfg.Store,
 		maxHistory: cfg.MaxHistory,
 		cancels:    make(map[string]context.CancelFunc),
 	}
@@ -93,21 +97,18 @@ func (c *Coordinator) submit(task *types.Task) (*types.Task, error) {
 		task.Steps[i].Status = types.StepStatusPending
 	}
 
-	c.tasksMu.Lock()
-	c.tasks[task.ID] = task
+	if err := c.store.Save(task); err != nil {
+		return nil, err
+	}
 	c.pruneHistory()
-	c.tasksMu.Unlock()
 
 	return task, nil
 }
 
 // Execute runs a submitted task asynchronously.
 func (c *Coordinator) Execute(ctx context.Context, taskID string) (<-chan types.TaskEvent, error) {
-	c.tasksMu.RLock()
-	task, exists := c.tasks[taskID]
-	c.tasksMu.RUnlock()
-
-	if !exists {
+	task, err := c.store.Get(taskID)
+	if err != nil {
 		return nil, fmt.Errorf("task not found: %s", taskID)
 	}
 
@@ -118,6 +119,9 @@ func (c *Coordinator) Execute(ctx context.Context, taskID string) (<-chan types.
 	task.Status = types.TaskStatusRunning
 	now := time.Now()
 	task.StartedAt = &now
+	if err := c.store.Save(task); err != nil {
+		return nil, err
+	}
 
 	ctx, cancel := context.WithCancel(ctx)
 	c.cancelsMu.Lock()
@@ -140,6 +144,7 @@ func (c *Coordinator) Execute(ctx context.Context, taskID string) (<-chan types.
 				task.Error = err.Error()
 			}
 		}
+		_ = c.store.Save(task)
 	}()
 
 	return events, nil
@@ -157,11 +162,8 @@ func (c *Coordinator) SubmitAndExecute(ctx context.Context, task *types.Task) (<
 
 // GetTask retrieves a task by ID.
 func (c *Coordinator) GetTask(taskID string) (*types.Task, error) {
-	c.tasksMu.RLock()
-	defer c.tasksMu.RUnlock()
-
-	task, exists := c.tasks[taskID]
-	if !exists {
+	task, err := c.store.Get(taskID)
+	if err != nil {
 		return nil, fmt.Errorf("task not found: %s", taskID)
 	}
 
@@ -170,26 +172,17 @@ func (c *Coordinator) GetTask(taskID string) (*types.Task, error) {
 
 // ListTasks returns all tasks matching the filter.
 func (c *Coordinator) ListTasks(status types.TaskStatus) []*types.Task {
-	c.tasksMu.RLock()
-	defer c.tasksMu.RUnlock()
-
-	var tasks []*types.Task
-	for _, task := range c.tasks {
-		if status == "" || task.Status == status {
-			tasks = append(tasks, task)
-		}
+	tasks, err := c.store.List(status)
+	if err != nil {
+		return nil
 	}
-
 	return tasks
 }
 
 // CancelTask attempts to cancel a running task.
 func (c *Coordinator) CancelTask(taskID string) error {
-	c.tasksMu.Lock()
-	defer c.tasksMu.Unlock()
-
-	task, exists := c.tasks[taskID]
-	if !exists {
+	task, err := c.store.Get(taskID)
+	if err != nil {
 		return fmt.Errorf("task not found: %s", taskID)
 	}
 
@@ -201,6 +194,9 @@ func (c *Coordinator) CancelTask(taskID string) error {
 		task.Status = types.TaskStatusCancelled
 		now := time.Now()
 		task.CompletedAt = &now
+		if err := c.store.Save(task); err != nil {
+			return err
+		}
 		return nil
 	}
 
@@ -216,12 +212,17 @@ func (c *Coordinator) CancelTask(taskID string) error {
 
 // pruneHistory removes old completed tasks to prevent memory growth.
 func (c *Coordinator) pruneHistory() {
-	if len(c.tasks) <= c.maxHistory {
+	tasks, err := c.store.List("")
+	if err != nil {
+		return
+	}
+
+	if len(tasks) <= c.maxHistory {
 		return
 	}
 
 	var oldest *types.Task
-	for _, task := range c.tasks {
+	for _, task := range tasks {
 		if task.Status == types.TaskStatusCompleted || task.Status == types.TaskStatusFailed || task.Status == types.TaskStatusCancelled {
 			if oldest == nil || task.CreatedAt.Before(oldest.CreatedAt) {
 				oldest = task
@@ -230,7 +231,7 @@ func (c *Coordinator) pruneHistory() {
 	}
 
 	if oldest != nil {
-		delete(c.tasks, oldest.ID)
+		_ = c.store.Delete(oldest.ID)
 	}
 }
 

@@ -1,0 +1,261 @@
+openapi: 3.0.3
+info:
+  title: MCP Orchestra API
+  version: 0.1.0
+servers:
+  - url: http://localhost:8090
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                properties:
+                  status:
+                    type: string
+  /ready:
+    get:
+      summary: Readiness check
+      responses:
+        "200":
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                properties:
+                  status:
+                    type: string
+  /v1/tools:
+    get:
+      summary: List available tools
+      responses:
+        "200":
+          description: Tool inventory
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  $ref: "#/components/schemas/ToolRef"
+  /v1/servers:
+    get:
+      summary: List registered MCP servers
+      responses:
+        "200":
+          description: Server list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ServerInfo"
+  /v1/tasks:
+    get:
+      summary: List tasks
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/TaskStatus"
+      responses:
+        "200":
+          description: Task list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Task"
+        "400":
+          description: Invalid status filter
+    post:
+      summary: Submit a task
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                prompt:
+                  type: string
+                task:
+                  $ref: "#/components/schemas/Task"
+                stream:
+                  type: boolean
+                timeout:
+                  type: string
+              oneOf:
+                - required: ["prompt"]
+                - required: ["task"]
+      responses:
+        "200":
+          description: Task result or event
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskEvent"
+        "400":
+          description: Invalid request
+        "501":
+          description: LLM planner not configured
+  /v1/tasks/{id}:
+    get:
+      summary: Get task status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+        "404":
+          description: Task not found
+  /v1/tasks/{id}/cancel:
+    post:
+      summary: Cancel a task
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "202":
+          description: Cancellation accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                properties:
+                  status:
+                    type: string
+        "400":
+          description: Task cannot be cancelled
+components:
+  schemas:
+    TaskStatus:
+      type: string
+      enum: [pending, running, completed, failed, cancelled]
+    StepStatus:
+      type: string
+      enum: [pending, running, completed, failed, skipped]
+    ToolRef:
+      type: object
+      additionalProperties: false
+      properties:
+        server:
+          type: string
+        tool:
+          type: string
+    ServerInfo:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+        endpoint:
+          type: string
+        tools:
+          type: array
+          items:
+            type: string
+        healthy:
+          type: boolean
+    Step:
+      type: object
+      additionalProperties: false
+      required: [id, tool, status]
+      properties:
+        id:
+          type: string
+        tool:
+          type: string
+        args:
+          type: object
+          additionalProperties: true
+        depends_on:
+          type: array
+          items:
+            type: string
+        status:
+          $ref: "#/components/schemas/StepStatus"
+        output:
+          nullable: true
+        error:
+          type: string
+        started_at:
+          type: string
+          format: date-time
+        duration:
+          type: string
+    Task:
+      type: object
+      additionalProperties: false
+      required: [id, steps, status, created_at]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        prompt:
+          type: string
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/Step"
+        status:
+          $ref: "#/components/schemas/TaskStatus"
+        result:
+          nullable: true
+        error:
+          type: string
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+    TaskEvent:
+      type: object
+      additionalProperties: false
+      properties:
+        type:
+          type: string
+        task_id:
+          type: string
+        step_id:
+          type: string
+        tool:
+          type: string
+        output:
+          nullable: true
+        error:
+          type: string
+        timestamp:
+          type: string
+          format: date-time

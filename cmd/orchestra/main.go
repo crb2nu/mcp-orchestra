@@ -107,6 +107,7 @@ func serveCmd() *cobra.Command {
 			mux.HandleFunc("GET /v1/servers", serversHandler(coord))
 			mux.HandleFunc("POST /v1/tasks", submitTaskHandler(coord, llmEndpoint != ""))
 			mux.HandleFunc("GET /v1/tasks/{id}", getTaskHandler(coord))
+			mux.HandleFunc("POST /v1/tasks/{id}/cancel", cancelTaskHandler(coord))
 
 			server := &http.Server{
 				Addr:         fmt.Sprintf(":%d", port),
@@ -486,5 +487,19 @@ func getTaskHandler(coord *coordinator.Coordinator) http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(task)
+	}
+}
+
+func cancelTaskHandler(coord *coordinator.Coordinator) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		taskID := r.PathValue("id")
+		if err := coord.CancelTask(taskID); err != nil {
+			http.Error(w, fmt.Sprintf(`{"error": %q}`, err.Error()), http.StatusBadRequest)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusAccepted)
+		w.Write([]byte(`{"status": "cancelling"}`))
 	}
 }

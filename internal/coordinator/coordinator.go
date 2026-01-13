@@ -23,6 +23,9 @@ type Coordinator struct {
 	tasks      map[string]*types.Task
 	tasksMu    sync.RWMutex
 	maxHistory int
+
+	cancels   map[string]context.CancelFunc
+	cancelsMu sync.Mutex
 }
 
 // Config holds coordinator configuration.
@@ -50,6 +53,7 @@ func New(cfg Config) *Coordinator {
 		executor:   executor.New(cfg.ExecutorCfg),
 		tasks:      make(map[string]*types.Task),
 		maxHistory: cfg.MaxHistory,
+		cancels:    make(map[string]context.CancelFunc),
 	}
 }
 
@@ -115,13 +119,26 @@ func (c *Coordinator) Execute(ctx context.Context, taskID string) (<-chan types.
 	now := time.Now()
 	task.StartedAt = &now
 
+	ctx, cancel := context.WithCancel(ctx)
+	c.cancelsMu.Lock()
+	c.cancels[task.ID] = cancel
+	c.cancelsMu.Unlock()
+
 	events := make(chan types.TaskEvent, 100)
 
 	go func() {
+		defer func() {
+			c.cancelsMu.Lock()
+			delete(c.cancels, task.ID)
+			c.cancelsMu.Unlock()
+		}()
+
 		err := c.executor.Execute(ctx, task, events)
 		if err != nil {
-			task.Status = types.TaskStatusFailed
-			task.Error = err.Error()
+			if task.Status != types.TaskStatusCancelled {
+				task.Status = types.TaskStatusFailed
+				task.Error = err.Error()
+			}
 		}
 	}()
 
@@ -180,9 +197,19 @@ func (c *Coordinator) CancelTask(taskID string) error {
 		return fmt.Errorf("task cannot be cancelled: %s", task.Status)
 	}
 
-	task.Status = types.TaskStatusCancelled
-	now := time.Now()
-	task.CompletedAt = &now
+	if task.Status == types.TaskStatusPending {
+		task.Status = types.TaskStatusCancelled
+		now := time.Now()
+		task.CompletedAt = &now
+		return nil
+	}
+
+	c.cancelsMu.Lock()
+	cancel, exists := c.cancels[taskID]
+	c.cancelsMu.Unlock()
+	if exists {
+		cancel()
+	}
 
 	return nil
 }

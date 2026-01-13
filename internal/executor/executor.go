@@ -101,6 +101,20 @@ func (e *Executor) Execute(ctx context.Context, task *types.Task, events chan<- 
 	// Execute waves sequentially, steps within wave in parallel
 	for waveIdx, wave := range plan.Waves {
 		if err := e.executeWave(ctx, task, wave, waveIdx, outputs, events); err != nil {
+			if ctx.Err() == context.Canceled || task.Status == types.TaskStatusCancelled {
+				task.Status = types.TaskStatusCancelled
+				task.Error = "task cancelled"
+				now := time.Now()
+				task.CompletedAt = &now
+				events <- types.TaskEvent{
+					Type:      "task_cancelled",
+					TaskID:    task.ID,
+					Error:     task.Error,
+					Timestamp: time.Now(),
+				}
+				return err
+			}
+
 			task.Status = types.TaskStatusFailed
 			task.Error = err.Error()
 			now := time.Now()

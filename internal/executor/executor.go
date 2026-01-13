@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -454,7 +455,58 @@ func (e *Executor) interpolateString(s string, outputs *sync.Map) (interface{}, 
 		return nil, fmt.Errorf("output not found for step: %s", stepID)
 	}
 
-	// TODO: Support embedded interpolation like "File content: ${{ steps.read.output }}"
+	if !strings.Contains(s, prefix) {
+		return s, nil
+	}
 
-	return s, nil
+	var builder strings.Builder
+	cursor := 0
+	for {
+		start := strings.Index(s[cursor:], prefix)
+		if start == -1 {
+			builder.WriteString(s[cursor:])
+			break
+		}
+
+		start += cursor
+		builder.WriteString(s[cursor:start])
+
+		end := strings.Index(s[start+len(prefix):], suffix)
+		if end == -1 {
+			builder.WriteString(s[start:])
+			break
+		}
+
+		end += start + len(prefix)
+		stepID := s[start+len(prefix) : end]
+		output, ok := outputs.Load(stepID)
+		if !ok {
+			return nil, fmt.Errorf("output not found for step: %s", stepID)
+		}
+
+		rendered, err := stringifyOutput(output)
+		if err != nil {
+			return nil, err
+		}
+
+		builder.WriteString(rendered)
+		cursor = end + len(suffix)
+	}
+
+	return builder.String(), nil
+}
+
+func stringifyOutput(output interface{}) (string, error) {
+	switch v := output.(type) {
+	case string:
+		return v, nil
+	case []byte:
+		return string(v), nil
+	default:
+		encoded, err := json.Marshal(v)
+		if err != nil {
+			return fmt.Sprint(v), nil
+		}
+		return string(encoded), nil
+	}
 }

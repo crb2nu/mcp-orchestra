@@ -35,6 +35,7 @@ type Config struct {
 	MaxOpen     int           // Maximum open connections per server (default: 10)
 	IdleTimeout time.Duration // Idle connection timeout (default: 5m)
 	Timeout     time.Duration // Task execution timeout (default: 5m)
+	DialFunc    pool.DialFunc // Optional dialer override (useful for tests)
 }
 
 // New creates a new executor.
@@ -53,20 +54,24 @@ func New(cfg Config) *Executor {
 	}
 
 	reg := cfg.Registry
-
-	// Create the connection pool with a dial function that looks up
-	// server endpoints from the registry and creates transports.
-	p := pool.New(pool.Config{
-		MaxIdle:     cfg.MaxIdle,
-		MaxOpen:     cfg.MaxOpen,
-		IdleTimeout: cfg.IdleTimeout,
-		DialFunc: func(ctx context.Context, serverName string) (mcp.Transport, error) {
+	dialer := cfg.DialFunc
+	if dialer == nil {
+		// Create the connection pool with a dial function that looks up
+		// server endpoints from the registry and creates transports.
+		dialer = func(ctx context.Context, serverName string) (mcp.Transport, error) {
 			server, err := reg.GetServer(serverName)
 			if err != nil {
 				return nil, fmt.Errorf("server not found: %s", serverName)
 			}
 			return transport.Dial(ctx, server.Endpoint)
-		},
+		}
+	}
+
+	p := pool.New(pool.Config{
+		MaxIdle:     cfg.MaxIdle,
+		MaxOpen:     cfg.MaxOpen,
+		IdleTimeout: cfg.IdleTimeout,
+		DialFunc:    dialer,
 	})
 
 	return &Executor{

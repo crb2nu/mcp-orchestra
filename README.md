@@ -129,7 +129,7 @@ Execute a task using natural language or DAG definition.
 ```json
 {
   "prompt": "string",           // Natural language task description
-  "dag": { ... },               // Or explicit DAG (optional)
+  "task": { ... },              // Or explicit task DAG (optional)
   "timeout": "5m",              // Task timeout
   "stream": true                // Stream results as SSE
 }
@@ -140,15 +140,28 @@ Execute a task using natural language or DAG definition.
 {"event": "step_start", "step_id": "read", "tool": "filesystem/read_file"}
 {"event": "step_complete", "step_id": "read", "output": "..."}
 {"event": "task_complete", "result": { ... }}
+{"event": "task_error", "error": "..."}
+{"event": "task_cancelled", "error": "task cancelled"}
 ```
 
 ### GET /v1/tools
 
 List all available tools from connected MCP servers.
 
+### GET /v1/tasks
+
+List tasks, optionally filtered by status.
+
+**Query params:**
+- `status`: pending, running, completed, failed, cancelled
+
 ### GET /v1/tasks/:id
 
 Get status of a running or completed task.
+
+### POST /v1/tasks/:id/cancel
+
+Cancel a running or pending task.
 
 ## Development
 

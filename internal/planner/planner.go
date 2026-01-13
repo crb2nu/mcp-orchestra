@@ -195,8 +195,8 @@ func (p *LLMPlanner) Plan(ctx context.Context, prompt string, tools types.ToolIn
 		{Role: "user", Content: prompt},
 	}
 
-	// Call LLM with JSON output format
-	result, err := p.client.CompleteJSON(ctx, messages)
+	// Call LLM with structured output format
+	result, err := p.client.CompleteStructured(ctx, messages, "task_plan", taskPlanSchema())
 	if err != nil {
 		return nil, fmt.Errorf("LLM completion failed: %w", err)
 	}
@@ -238,6 +238,43 @@ func (p *LLMPlanner) Plan(ctx context.Context, prompt string, tools types.ToolIn
 	}
 
 	return task, nil
+}
+
+func taskPlanSchema() map[string]interface{} {
+	return map[string]interface{}{
+		"type":                 "object",
+		"additionalProperties": false,
+		"required":             []string{"name", "steps"},
+		"properties": map[string]interface{}{
+			"name": map[string]interface{}{
+				"type": "string",
+			},
+			"steps": map[string]interface{}{
+				"type": "array",
+				"items": map[string]interface{}{
+					"type":                 "object",
+					"additionalProperties": false,
+					"required":             []string{"id", "tool"},
+					"properties": map[string]interface{}{
+						"id": map[string]interface{}{
+							"type": "string",
+						},
+						"tool": map[string]interface{}{
+							"type": "string",
+						},
+						"args": map[string]interface{}{
+							"type":                 "object",
+							"additionalProperties": true,
+						},
+						"depends_on": map[string]interface{}{
+							"type":  "array",
+							"items": map[string]interface{}{"type": "string"},
+						},
+					},
+				},
+			},
+		},
+	}
 }
 
 // Validate delegates to static validation.

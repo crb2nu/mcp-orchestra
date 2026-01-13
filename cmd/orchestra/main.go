@@ -105,6 +105,7 @@ func serveCmd() *cobra.Command {
 			mux.HandleFunc("GET /ready", readyHandler)
 			mux.HandleFunc("GET /v1/tools", toolsHandler(coord))
 			mux.HandleFunc("GET /v1/servers", serversHandler(coord))
+			mux.HandleFunc("GET /v1/tasks", listTasksHandler(coord))
 			mux.HandleFunc("POST /v1/tasks", submitTaskHandler(coord, llmEndpoint != ""))
 			mux.HandleFunc("GET /v1/tasks/{id}", getTaskHandler(coord))
 			mux.HandleFunc("POST /v1/tasks/{id}/cancel", cancelTaskHandler(coord))
@@ -487,6 +488,33 @@ func getTaskHandler(coord *coordinator.Coordinator) http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(task)
+	}
+}
+
+func listTasksHandler(coord *coordinator.Coordinator) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		statusParam := r.URL.Query().Get("status")
+		if statusParam != "" && !isValidTaskStatus(statusParam) {
+			http.Error(w, `{"error": "invalid status filter"}`, http.StatusBadRequest)
+			return
+		}
+
+		tasks := coord.ListTasks(types.TaskStatus(statusParam))
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(tasks)
+	}
+}
+
+func isValidTaskStatus(value string) bool {
+	switch types.TaskStatus(value) {
+	case types.TaskStatusPending,
+		types.TaskStatusRunning,
+		types.TaskStatusCompleted,
+		types.TaskStatusFailed,
+		types.TaskStatusCancelled:
+		return true
+	default:
+		return false
 	}
 }
 

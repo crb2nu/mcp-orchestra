@@ -103,6 +103,14 @@ func (e *Executor) Execute(ctx context.Context, task *types.Task, events chan<- 
 		if err := e.executeWave(ctx, task, wave, waveIdx, outputs, events); err != nil {
 			task.Status = types.TaskStatusFailed
 			task.Error = err.Error()
+			now := time.Now()
+			task.CompletedAt = &now
+			events <- types.TaskEvent{
+				Type:      "task_error",
+				TaskID:    task.ID,
+				Error:     err.Error(),
+				Timestamp: time.Now(),
+			}
 			return err
 		}
 	}

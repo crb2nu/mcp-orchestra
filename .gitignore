@@ -17,6 +17,9 @@ coverage.txt
 .DS_Store
 Thumbs.db
 
+# Tool caches
+.cache/
+
 # Local config
 .env
 *.local.yaml

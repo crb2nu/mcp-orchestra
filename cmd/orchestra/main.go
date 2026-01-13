@@ -407,6 +407,16 @@ func submitTaskHandler(coord *coordinator.Coordinator, llmEnabled bool) http.Han
 		}
 
 		ctx := r.Context()
+		if req.Timeout != "" {
+			timeout, err := time.ParseDuration(req.Timeout)
+			if err != nil {
+				http.Error(w, `{"error": "invalid timeout format"}`, http.StatusBadRequest)
+				return
+			}
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, timeout)
+			defer cancel()
+		}
 
 		var events <-chan types.TaskEvent
 		var err error

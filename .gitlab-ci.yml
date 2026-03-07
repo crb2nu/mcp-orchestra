@@ -1,0 +1,53 @@
+stages:
+  - lint
+  - test
+  - build
+
+variables:
+  GOTOOLCHAIN: "local"
+  GOPRIVATE: "gitlab.flexinfer.ai"
+  GONOSUMDB: "gitlab.flexinfer.ai"
+  GONOPROXY: "gitlab.flexinfer.ai"
+
+default:
+  image: registry.harbor.lan/library/golang:1.25.7
+  before_script:
+    - git config --global url."https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.flexinfer.ai/".insteadOf "https://gitlab.flexinfer.ai/"
+    - go version
+
+cache:
+  key: ${CI_COMMIT_REF_SLUG}
+  policy: pull-push
+  paths:
+    - .cache/go-build/
+    - .cache/gomod/
+
+fmt:
+  stage: lint
+  script:
+    - mkdir -p .cache/go-build .cache/gomod
+    - export GOCACHE="$CI_PROJECT_DIR/.cache/go-build"
+    - export GOMODCACHE="$CI_PROJECT_DIR/.cache/gomod"
+    - test -z "$(gofmt -l $(git ls-files '*.go'))"
+    - go vet ./...
+
+test:
+  stage: test
+  script:
+    - mkdir -p .cache/go-build .cache/gomod
+    - export GOCACHE="$CI_PROJECT_DIR/.cache/go-build"
+    - export GOMODCACHE="$CI_PROJECT_DIR/.cache/gomod"
+    - go test ./...
+
+build:
+  stage: build
+  script:
+    - mkdir -p .cache/go-build .cache/gomod bin
+    - export GOCACHE="$CI_PROJECT_DIR/.cache/go-build"
+    - export GOMODCACHE="$CI_PROJECT_DIR/.cache/gomod"
+    - go build -o bin/orchestra ./cmd/orchestra
+    - ./bin/orchestra --help >/dev/null
+  artifacts:
+    when: always
+    paths:
+      - bin/orchestra

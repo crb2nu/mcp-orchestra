@@ -1,0 +1,30 @@
+# github.com/google/uuid v1.6.0
+## explicit
+github.com/google/uuid
+# github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674
+## explicit; go 1.20
+github.com/gorilla/websocket
+# github.com/inconshreveable/mousetrap v1.1.0
+## explicit; go 1.18
+github.com/inconshreveable/mousetrap
+# github.com/spf13/cobra v1.9.1
+## explicit; go 1.15
+github.com/spf13/cobra
+# github.com/spf13/pflag v1.0.6
+## explicit; go 1.12
+github.com/spf13/pflag
+# gitlab.flexinfer.ai/libs/fi-mcp-kit v0.2.0
+## explicit; go 1.24.0
+gitlab.flexinfer.ai/libs/fi-mcp-kit/pkg/generator
+gitlab.flexinfer.ai/libs/fi-mcp-kit/pkg/registry
+# gitlab.flexinfer.ai/libs/mcp-go v0.2.0
+## explicit; go 1.22
+gitlab.flexinfer.ai/libs/mcp-go
+gitlab.flexinfer.ai/libs/mcp-go/pool
+# golang.org/x/net v0.26.0
+## explicit; go 1.18
+golang.org/x/net/internal/socks
+golang.org/x/net/proxy
+# gopkg.in/yaml.v3 v3.0.1
+## explicit
+gopkg.in/yaml.v3

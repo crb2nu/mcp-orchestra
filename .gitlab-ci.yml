@@ -5,6 +5,7 @@ stages:
 
 variables:
   GOTOOLCHAIN: "local"
+  GOFLAGS: "-mod=vendor"
   GOPRIVATE: "gitlab.flexinfer.ai"
   GONOSUMDB: "gitlab.flexinfer.ai"
   GONOPROXY: "gitlab.flexinfer.ai"

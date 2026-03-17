@@ -1,3 +1,7 @@
+include:
+  - project: 'services/tech-radar'
+    file: '/ci/radar.yml'
+
 stages:
   - lint
   - test
@@ -52,3 +56,6 @@ build:
     when: always
     paths:
       - bin/orchestra
+
+radar-scan:
+  extends: .radar-scan
